@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/wingsofcarolina/wcfc-updater/pkg/api_version"
 	"github.com/wingsofcarolina/wcfc-updater/pkg/github_api"
 )
+
+var dryRun bool
 
 type Repo struct {
 	Name     string `yaml:"name"`
@@ -122,16 +125,23 @@ func processRepo(ctx context.Context, sess *github_api.Session, owner string, re
 		}
 	}
 
-	fmt.Printf("Dispatching release workflow...\n")
-	err = sess.RunWorkflowDispatch(ctx, owner, repo.Name, "main", "release.yml", nil)
-	if err != nil {
-		return fmt.Errorf("failed to dispatch release workflow: %w", err)
+	if dryRun {
+		fmt.Printf("Not dispatching release workflow due to --dry-run\n")
+	} else {
+		fmt.Printf("Dispatching release workflow...\n")
+		err = sess.RunWorkflowDispatch(ctx, owner, repo.Name, "main", "release.yml", nil)
+		if err != nil {
+			return fmt.Errorf("failed to dispatch release workflow: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func mainFunc() error {
+	flag.BoolVar(&dryRun, "dry-run", false, "Run without making any changes")
+	flag.Parse()
+
 	ctx := context.Background()
 
 	ap, err := getAuth()
