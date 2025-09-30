@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Usage: run <image-tag> [--params]"
+  exit 1
+fi
+
+if [ -x "$(which podman)" ]; then
+  CONTAINER_CMD=podman
+elif [ -x "$(which docker)" ]; then
+  CONTAINER_CMD=docker
+else
+  echo "Neither podman nor docker are installed"
+  exit 1
+fi
+
+for SECRET in wcfc-updater-app-id wcfc-updater-installation-id wcfc-updater-private-key; do
+  if ! ${CONTAINER_CMD} secret exists $SECRET; then
+    echo "Please set up secrets before running this"
+    exit 1
+  fi
+done
+
+${CONTAINER_CMD} run -it --rm --name wcfc-updater \
+  --secret=wcfc-updater-app-id,type=env,target=GITHUB_APP_ID \
+  --secret=wcfc-updater-installation-id,type=env,target=GITHUB_INSTALLATION_ID \
+  --secret=wcfc-updater-private-key,type=env,target=GITHUB_PRIVATE_KEY \
+  $@

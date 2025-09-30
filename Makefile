@@ -42,6 +42,11 @@ push: check-version-not-dirty $(DOCKER_FLAG_FILE)
 deploy: check-version-not-dirty push
 	@gcloud run jobs deploy $(APP_NAME) --image $(CONTAINER_TAG) --region $(GOOGLE_CLOUD_REGION)
 
+# To run as a non-dry-run, use: make build && ./scripts/run $(make container-tag) [--force]
+.PHONY: run
+run: $(DOCKER_FLAG_FILE)
+	@./scripts/run $(CONTAINER_TAG) --dry-run
+
 .PHONY: lint
 lint:
 	@golangci-lint run
@@ -57,6 +62,10 @@ check-fmt:
 .PHONY: version
 version:
 	@echo $(APP_VERSION)
+
+.PHONY: container-tag
+container-tag:
+	@echo $(CONTAINER_TAG)
 
 .PHONY: clean
 clean:

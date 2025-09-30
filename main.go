@@ -15,6 +15,7 @@ import (
 )
 
 var dryRun bool
+var force bool
 
 type Repo struct {
 	Name     string `yaml:"name"`
@@ -118,8 +119,17 @@ func processRepo(ctx context.Context, sess *github_api.Session, owner string, re
 		return nil
 	}
 
+	hasHumanCommits := false
 	for _, commit := range lt.Commits {
 		if commit.GetAuthor().GetLogin() != "dependabot[bot]" {
+			hasHumanCommits = true
+			break
+		}
+	}
+	if hasHumanCommits {
+		if force {
+			fmt.Printf("Continuing: non-Dependabot post-tag commits found, but --force was specified\n")
+		} else {
 			fmt.Printf("Skipping: non-Dependabot post-tag commits found\n")
 			return nil
 		}
@@ -140,6 +150,7 @@ func processRepo(ctx context.Context, sess *github_api.Session, owner string, re
 
 func mainFunc() error {
 	flag.BoolVar(&dryRun, "dry-run", false, "Run without making any changes")
+	flag.BoolVar(&force, "force", false, "Force updates even if non-Dependabot commits present")
 	flag.Parse()
 
 	ctx := context.Background()
