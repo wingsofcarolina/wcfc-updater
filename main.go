@@ -77,14 +77,19 @@ func processRepo(ctx context.Context, sess *github_api.Session, owner string, re
 		return fmt.Errorf("failed to get latest commits: %w", err)
 	}
 
-	// Get commit from /api/version on the running site
-	runningCommit, err := api_version.GetVersionCommit(repo.Hostname)
-	if err != nil {
-		return fmt.Errorf("failed to get version commit: %w", err)
+	var runningCommit string
+	if repo.Hostname != "" {
+		// Get commit from /api/version on the running site
+		runningCommit, err = api_version.GetVersionCommit(repo.Hostname)
+		if err != nil {
+			return fmt.Errorf("failed to get version commit: %w", err)
+		}
 	}
 
 	// Print results (tag commit + later commits)
-	fmt.Printf("    Current running version: %s\n", runningCommit[:7])
+	if repo.Hostname != "" {
+		fmt.Printf("    Current running version: %s\n", runningCommit[:7])
+	}
 	fmt.Printf("    Latest tag in repo: %s (%s)\n", lt.LatestTagName, lt.LatestTagSHA[:7])
 	fmt.Printf("    Commits from latest tag:\n")
 	for _, c := range lt.Commits {
@@ -92,7 +97,7 @@ func processRepo(ctx context.Context, sess *github_api.Session, owner string, re
 			strings.SplitN(c.GetCommit().GetMessage(), "\n", 2)[0])
 	}
 
-	if runningCommit != lt.LatestTagSHA {
+	if repo.Hostname != "" && runningCommit != lt.LatestTagSHA {
 		fmt.Printf("Skipping: running commit %s differs from latest tag commit %s\n", runningCommit[:7], lt.LatestTagSHA[:7])
 		return nil
 	}

@@ -13,3 +13,5 @@ repos:
 
   - name: wcfc-groups
     hostname: groups-mgmt.wingsofcarolina.org
+
+  - name: wcfc-updater
