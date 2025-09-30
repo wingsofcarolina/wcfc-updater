@@ -58,7 +58,7 @@ func getConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var config Config
 	decoder := yaml.NewDecoder(f)
 	if err := decoder.Decode(&config); err != nil {

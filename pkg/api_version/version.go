@@ -11,7 +11,7 @@ func GetVersionCommit(hostname string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("http get failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var data map[string]interface{}
 	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {

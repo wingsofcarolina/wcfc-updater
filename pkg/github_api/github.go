@@ -48,7 +48,7 @@ func getInstallationToken(ctx context.Context, jwtString, installID string) (str
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 
 	var tokenResp struct {
