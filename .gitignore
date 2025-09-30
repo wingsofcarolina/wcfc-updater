@@ -1,0 +1,5 @@
+/wcfc-updater
+/.docker-build*
+/.idea/
+*.swp
+*~

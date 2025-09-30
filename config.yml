@@ -1,0 +1,15 @@
+---
+owner: wingsofcarolina
+repos:
+
+  - name: wcfc-quiz
+    hostname: quiz.wingsofcarolina.org
+
+  - name: wcfc-manuals
+    hostname: manuals.wingsofcarolina.org
+
+  - name: wcfc-groundschool
+    hostname: groundschool.wingsofcarolina.org
+
+  - name: wcfc-groups
+    hostname: groups-mgmt.wingsofcarolina.org
