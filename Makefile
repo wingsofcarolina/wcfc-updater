@@ -40,7 +40,7 @@ push: check-version-not-dirty $(DOCKER_FLAG_FILE)
 
 .PHONY: deploy
 deploy: check-version-not-dirty push
-	@gcloud run deploy --no-allow-unauthenticated $(APP_NAME) --image $(CONTAINER_TAG) --region $(GOOGLE_CLOUD_REGION)
+	@gcloud run jobs deploy $(APP_NAME) --image $(CONTAINER_TAG) --region $(GOOGLE_CLOUD_REGION)
 
 .PHONY: lint
 lint:
