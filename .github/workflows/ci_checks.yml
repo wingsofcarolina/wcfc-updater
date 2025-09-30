@@ -32,7 +32,7 @@ jobs:
       run: make check-fmt
 
     - name: Run Go linters
-      uses: golangci/golangci-liunt-action@v8
+      uses: golangci/golangci-lint-action@v8
 
     - name: Build the app
       run: make build
