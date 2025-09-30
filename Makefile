@@ -38,6 +38,10 @@ push: check-version-not-dirty $(DOCKER_FLAG_FILE)
 	@echo Pushing $(CONTAINER_TAG)...
 	@$(CONTAINER_CMD) push $(CONTAINER_TAG)
 
+.PHONY: deploy
+deploy: check-version-not-dirty push
+	@gcloud run deploy $(APP_NAME) --image $(CONTAINER_TAG) --region $(GOOGLE_CLOUD_REGION)
+
 .PHONY: lint
 lint:
 	@golangci-lint run

@@ -1,0 +1,79 @@
+name: build-and-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: false
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'  # version numbers, like 1.2.3
+
+jobs:
+  build-and-release:
+    name: build-and-release
+    runs-on: ubuntu-latest
+    environment: Google Cloud
+    permissions:
+      actions: read
+      contents: write
+      packages: read
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Install semver-cli
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version == '' }}
+      run: cargo install semver-cli
+
+    - name: Calculate the tag value
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version == '' }}
+      id: calc_tag
+      run: echo "tag=$(semver-cli $(make version) --increment)" >> $GITHUB_OUTPUT
+
+    - name: Determine the tag to be used
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      id: tag
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          TAG="${{ github.event.inputs.version }}"
+        else
+          TAG="${{ steps.calc_tag.outputs.tag }}"
+        fi
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Push git tag
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        git tag -a "${{ steps.tag.outputs.tag }}" -m "{{ steps.tag.outputs.tag }}"
+        git push origin "${{ steps.tag.outputs.tag }}"
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+
+    - name: Build the app
+      run: make build
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v3
+      with:
+        credentials_json: ${{ secrets.GOOGLE_CLOUD_JSON }}
+
+    - name: Set up Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v3
+      with:
+        version: '>= 363.0.0'
+
+    - name: Set up gcloud Docker credential helper
+      run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+    - name: Deploy to Google Cloud
+      run: make deploy
+

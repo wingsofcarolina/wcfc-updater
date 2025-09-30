@@ -1,0 +1,39 @@
+---
+name: ci_checks
+
+on:
+
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+
+jobs:
+
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Setup Go
+      uses: actions/setup-go@v6
+
+    - name: Check Go code formatting
+      run: make check-fmt
+
+    - name: Run Go linters
+      uses: golangci/golangci-liunt-action@v8
+
+    - name: Build the app
+      run: make build
+
