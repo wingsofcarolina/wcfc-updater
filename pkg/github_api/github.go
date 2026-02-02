@@ -5,8 +5,10 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -15,6 +17,64 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v55/github"
 )
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+	},
+}
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return false
+}
+
+func withRetry[T any](ctx context.Context, maxAttempts int, operation func() (T, error)) (T, error) {
+	var lastErr error
+	var zero T
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		result, err := operation()
+		if err == nil {
+			return result, nil
+		}
+
+		lastErr = err
+		if !isRetryableError(err) {
+			return zero, err
+		}
+
+		if attempt < maxAttempts {
+			backoff := time.Duration(attempt*attempt) * time.Second
+			select {
+			case <-ctx.Done():
+				return zero, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+	}
+
+	return zero, fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
+}
 
 type Session struct {
 	client *github.Client
@@ -39,25 +99,27 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // getInstallationToken exchanges a JWT for an installation token
 func getInstallationToken(ctx context.Context, jwtString, installID string) (string, error) {
-	url := fmt.Sprintf("https://api.github.com/app/installations/%s/access_tokens", installID)
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
-	req.Header.Set("Authorization", "Bearer "+jwtString)
-	req.Header.Set("Accept", "application/vnd.github+json")
+	return withRetry(ctx, 3, func() (string, error) {
+		url := fmt.Sprintf("https://api.github.com/app/installations/%s/access_tokens", installID)
+		req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
+		req.Header.Set("Authorization", "Bearer "+jwtString)
+		req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, _ := io.ReadAll(resp.Body)
 
-	var tokenResp struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", err
-	}
-	return tokenResp.Token, nil
+		var tokenResp struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(body, &tokenResp); err != nil {
+			return "", err
+		}
+		return tokenResp.Token, nil
+	})
 }
 
 func NewSession(ctx context.Context, auth *AuthParams) (*Session, error) {
