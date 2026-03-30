@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"sort"
@@ -18,16 +19,20 @@ import (
 	"github.com/google/go-github/v55/github"
 )
 
+var githubTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+	transport.TLSHandshakeTimeout = 30 * time.Second
+	transport.ResponseHeaderTimeout = 30 * time.Second
+	return transport
+}()
+
 var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
-	},
+	Timeout:   60 * time.Second,
+	Transport: githubTransport,
 }
 
 func isRetryableError(err error) bool {
@@ -53,12 +58,17 @@ func withRetry[T any](ctx context.Context, maxAttempts int, operation func() (T,
 	var zero T
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		log.Printf("Attempt %d/%d", attempt, maxAttempts)
 		result, err := operation()
 		if err == nil {
+			if attempt > 1 {
+				log.Printf("Attempt %d/%d succeeded", attempt, maxAttempts)
+			}
 			return result, nil
 		}
 
 		lastErr = err
+		log.Printf("Attempt %d/%d failed: %v", attempt, maxAttempts, err)
 		if !isRetryableError(err) {
 			return zero, err
 		}
@@ -105,6 +115,7 @@ func getInstallationToken(ctx context.Context, jwtString, installID string) (str
 		req.Header.Set("Authorization", "Bearer "+jwtString)
 		req.Header.Set("Accept", "application/vnd.github+json")
 
+		log.Printf("Requesting GitHub installation token for installation %s", installID)
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			return "", err
@@ -112,11 +123,19 @@ func getInstallationToken(ctx context.Context, jwtString, installID string) (str
 		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(resp.Body)
 
+		log.Printf("GitHub installation token response status: %s", resp.Status)
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return "", fmt.Errorf("github token request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
+
 		var tokenResp struct {
 			Token string `json:"token"`
 		}
 		if err := json.Unmarshal(body, &tokenResp); err != nil {
 			return "", err
+		}
+		if tokenResp.Token == "" {
+			return "", fmt.Errorf("github token response did not contain a token")
 		}
 		return tokenResp.Token, nil
 	})
