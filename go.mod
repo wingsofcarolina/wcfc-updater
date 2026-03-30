@@ -3,7 +3,7 @@ module github.com/wingsofcarolina/wcfc-updater
 go 1.25.1
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v55 v55.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
